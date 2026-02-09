@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qbittorrent Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Media Dashboard</h1>
+            <div id="last-updated">Updating...</div>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Plex Section - Full Width for Posters -->
+            <div class="card plex-card full-width">
+                <div class="card-header">
+                    <h2><a href="http://localhost:32400" target="_blank">Plex</a></h2>
+                    <span class="status-indicator online"></span>
+                </div>
+                <div class="card-content" id="plex-content">
+                    <div class="loading">Loading Plex data...</div>
+                </div>
+            </div>
+
+            <!-- Qbittorrent Section -->
+            <div class="card qbit-card">
+                <div class="card-header">
+                    <h2><a href="http://localhost:8080" target="_blank">Qbittorrent</a></h2>
+                    <span class="status-indicator online"></span>
+                </div>
+                <div class="card-content" id="qbit-content">
+                    <div class="loading">Loading Qbittorrent data...</div>
+                </div>
+            </div>
+
+            <!-- Sonarr Section -->
+            <div class="card sonarr-card">
+                <div class="card-header">
+                    <h2><a href="http://localhost:8989" target="_blank">Sonarr</a></h2>
+                    <span class="status-indicator online"></span>
+                </div>
+                <div class="card-content" id="sonarr-content">
+                    <div class="loading">Loading Sonarr data...</div>
+                </div>
+            </div>
+
+            <!-- Radarr Section -->
+            <div class="card radarr-card">
+                <div class="card-header">
+                    <h2><a href="http://localhost:7878" target="_blank">Radarr</a></h2>
+                    <span class="status-indicator online"></span>
+                </div>
+                <div class="card-content" id="radarr-content">
+                    <div class="loading">Loading Radarr data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Torrent Errors</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-content" id="error-list">
+                <!-- Errors injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentQbitData = null;
+
+        function updateDashboard() {
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    renderPlex(data.plex);
+                    renderQbit(data.qbittorrent);
+                    renderSonarr(data.sonarr);
+                    renderRadarr(data.radarr);
+
+                    const now = new Date();
+                    document.getElementById('last-updated').textContent = `Last updated: ${now.toLocaleTimeString()}`;
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        function renderPlex(data) {
+            const container = document.getElementById('plex-content');
+            if (data.error) {
+                container.innerHTML = `<div class="error">${data.error}</div>`;
+                return;
+            }
+
+            let html = '<div class="plex-shelf-container">';
+
+            // Movies Shelf
+            html += '<div class="shelf-section"><h3>Recently Added Movies</h3><div class="poster-grid">';
+            if (data.movies && data.movies.length > 0) {
+                data.movies.forEach(movie => {
+                    const thumb = movie.thumb || '';
+                    html += `
+                       <div class="poster-item">
+                           <div class="poster-image" style="background-image: url('${thumb}')"></div>
+                           <div class="poster-info">
+                               <div class="poster-title" title="${movie.title}">${movie.title}</div>
+                               <div class="poster-meta">${movie.year}</div>
+                           </div>
+                       </div>
+                   `;
+                });
+            } else {
+                html += '<div class="empty-state">No recent movies</div>';
+            }
+            html += '</div></div>';
+
+            // Shows Shelf
+            html += '<div class="shelf-section"><h3>Recently Added Shows</h3><div class="poster-grid">';
+            if (data.shows && data.shows.length > 0) {
+                data.shows.forEach(show => {
+                    const thumb = show.thumb || '';
+                    html += `
+                       <div class="poster-item">
+                           <div class="poster-image" style="background-image: url('${thumb}')"></div>
+                           <div class="poster-info">
+                               <div class="poster-title" title="${show.title}">${show.title}</div>
+                               <div class="poster-meta">${show.episode}</div>
+                           </div>
+                       </div>
+                   `;
+                });
+            } else {
+                html += '<div class="empty-state">No recent shows</div>';
+            }
+            html += '</div></div>';
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderQbit(data) {
+            currentQbitData = data;
+            const container = document.getElementById('qbit-content');
+            if (data.error) {
+                container.innerHTML = `<div class="error">${data.error}</div>`;
+                return;
+            }
+
+            // Stat row with click handler for errors
+            let html = `<div class="stat-row">
+                            <div class="stat-item">
+                                <span class="stat-label">Active</span>
+                                <span class="stat-value">${data.active_downloads ? data.active_downloads.length : 0}</span>
+                            </div>
+                            <div class="stat-item ${data.error_count && data.error_count != 0 && data.error_count != '0' ? 'text-error clickable' : ''}" onclick="showErrors()">
+                                <span class="stat-label">Errors</span>
+                                <span class="stat-value">${data.error_count || 0}</span>
+                            </div>
+                        </div>`;
+
+            if (data.active_downloads && data.active_downloads.length > 0) {
+                html += '<div class="section-title">Downloading</div><div class="download-list">';
+                data.active_downloads.forEach(dl => {
+                    html += `
+                        <div class="download-item">
+                            <div class="download-name">${dl.name}</div>
+                            <div class="download-speed">${dl.speed}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            html += '<div class="section-title">Recent Torrents</div><div class="torrent-list">';
+            if (data.recent && data.recent.length > 0) {
+                data.recent.slice(0, 5).forEach(t => {
+                    let progressClass = 'progress-bar';
+                    const progressVal = parseFloat(t.progress);
+                    if (progressVal >= 100) progressClass += ' complete';
+
+                    html += `
+                        <div class="torrent-item">
+                             <div class="torrent-name" title="${t.name}">${t.name}</div>
+                             <div class="torrent-meta">
+                                <span class="torrent-state">${t.state}</span>
+                                <div class="progress-container">
+                                    <div class="${progressClass}" style="width: ${t.progress}"></div>
+                                </div>
+                             </div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<div class="empty-state">No recent torrents</div>';
+            }
+            html += '</div>';
+
+            container.innerHTML = html;
+        }
+
+        function renderSonarr(data) {
+            renderArr(data, 'sonarr-content', 'Sonarr');
+        }
+
+        function renderRadarr(data) {
+            renderArr(data, 'radarr-content', 'Radarr');
+        }
+
+        function renderArr(data, elementId, appName) {
+            const container = document.getElementById(elementId);
+            if (data.error) {
+                container.innerHTML = `<div class="error">${data.error}</div>`;
+                return;
+            }
+
+            let html = '';
+
+            if (data.errors && data.errors.length > 0) {
+                html += `<div class="alert alert-error">${data.errors.length} System Errors</div>`;
+            }
+            if (data.warnings && data.warnings.length > 0) {
+                html += `<div class="alert alert-warning">${data.warnings.length} System Warnings</div>`;
+            }
+
+            html += '<div class="section-title">Activity Queue</div><div class="activity-list">';
+            if (data.activity && data.activity.length > 0) {
+                data.activity.forEach(item => {
+                    html += `
+                        <div class="activity-item">
+                            <div class="activity-title">${item.title}</div>
+                            <span class="status-pill status-${item.status.toLowerCase()}">${item.status}</span>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<div class="empty-state">No active items</div>';
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+
+        // Modal Logic
+        const modal = document.getElementById('error-modal');
+        const closeBtn = document.querySelector('.close-modal');
+
+        function showErrors() {
+            if (!currentQbitData || !currentQbitData.errored_torrents || currentQbitData.errored_torrents.length === 0) return;
+
+            const list = document.getElementById('error-list');
+            list.innerHTML = currentQbitData.errored_torrents.map(err => {
+                // We need the hash to delete. We didn't pass it before.
+                // Let's assume the backend now passes 'hash' in errored_torrents.
+                // Note: We need to update fetch_qbittorrent.py to include 'hash' in the error list if not already.
+                // Looking at debug output, 'hash' is available in the error list from qbit.
+                // Let's verify fetch_qbittorrent updates to include hash.
+
+                // For now, let's render assuming we have it, or fallback.
+                const hashParams = err.hash ? `data-hash="${err.hash}" js-data-name="${err.name}"` : '';
+
+                return `
+                <div class="error-item">
+                    <div class="error-header">
+                        <div class="error-name">${err.name}</div>
+                        ${err.hash ? `<button class="delete-btn" onclick="confirmDelete('${err.hash}', '${err.name.replace(/'/g, "\\'")}')" title="Delete Torrent">&times;</button>` : ''}
+                    </div>
+                    <div class="error-msg">${err.message || 'Unknown Error'}</div>
+                </div>
+            `}).join('');
+
+            modal.classList.remove('hidden');
+        }
+
+        closeBtn.onclick = () => modal.classList.add('hidden');
+        window.onclick = (e) => {
+            if (e.target === modal) modal.classList.add('hidden');
+        }
+
+        // Confirmation Modal Logic
+        function confirmDelete(hash, name) {
+            // Simple approach: Use browser confirm or a custom internal state
+            // Let's use a custom internal setup by injecting into the existing modal or a new one.
+            // For speed/simplicity given the constraints, let's use a standard confirm but user wanted a checkbox.
+            // So we must implement a custom UI for confirmation.
+
+            const list = document.getElementById('error-list');
+            list.innerHTML = `
+                <div class="confirm-container">
+                    <h3>Delete Torrent?</h3>
+                    <p>Are you sure you want to delete:</p>
+                    <div class="confirm-name">${name}</div>
+                    
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="delete-files-check">
+                        Also delete files on disk
+                    </label>
+                    
+                    <div class="confirm-actions">
+                        <button class="btn-cancel" onclick="showErrors()">Cancel</button>
+                        <button class="btn-delete" onclick="executeDelete('${hash}')">Delete</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function executeDelete(hash) {
+            const deleteFiles = document.getElementById('delete-files-check').checked;
+
+            fetch('/api/delete_torrent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hash: hash, delete_files: deleteFiles })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Refresh data immediately
+                        updateDashboard();
+                        modal.classList.add('hidden');
+                    } else {
+                        alert('Error deleting: ' + data.error);
+                        showErrors(); // Go back to list
+                    }
+                })
+                .catch(err => {
+                    alert('Network error');
+                    console.error(err);
+                });
+        }
+
+        // Update every 30 seconds
+        updateDashboard();
+        setInterval(updateDashboard, 30000);
+    </script>
+</body>
+
+</html>

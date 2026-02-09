@@ -1,0 +1,20 @@
+# Maintainer: Greg <greg@example.com>
+pkgname=media-dashboard
+pkgver=1.0.0
+pkgrel=3
+pkgdesc="Home Media Dashboard for Plex, Qbittorrent, Sonarr, and Radarr"
+arch=('x86_64')
+url="https://github.com/example/media-dashboard"
+license=('MIT')
+depends=()
+makedepends=()
+source=("media-dashboard.service")
+sha256sums=('SKIP')
+
+package() {
+    # Install binary
+    install -Dm755 "$srcdir/../../../dist/media-dashboard" "$pkgdir/usr/bin/media-dashboard"
+    
+    # Install systemd user service
+    install -Dm644 "$srcdir/media-dashboard.service" "$pkgdir/usr/lib/systemd/user/media-dashboard.service"
+}

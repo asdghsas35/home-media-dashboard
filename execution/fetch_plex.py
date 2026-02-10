@@ -3,6 +3,7 @@ import urllib.error
 import urllib.parse
 import json
 import os
+import traceback
 
 def fetch_plex_data():
     plex_url = os.getenv('PLEX_URL')
@@ -55,8 +56,14 @@ def fetch_plex_data():
                             'thumb': f"{plex_url}{item.get('thumb')}?X-Plex-Token={plex_token}" if item.get('thumb') else None
                         })
             return items
+        except urllib.error.HTTPError as e:
+            return {'error': f'Plex HTTP Error {e.code}: Check PLEX_URL and PLEX_TOKEN'}
+        except urllib.error.URLError as e:
+            return {'error': f'Plex Connection Error: {e.reason} - Is PLEX_URL reachable from this machine?'}
+        except json.JSONDecodeError:
+            return {'error': 'Plex: Invalid JSON response. Check PLEX_URL.'}
         except Exception as e:
-            return [] # Fail silently for specific calls
+            return {'error': f'Plex: {str(e)}'}
 
     def get_latest_session():
         try:
@@ -95,12 +102,21 @@ def fetch_plex_data():
                     })
                 return sessions
             return []
+        except urllib.error.URLError:
+            return []
         except Exception:
             return []
 
     try:
         recent_movies = get_recent_items(1)
+        # If movies fetch returned an error, bubble it up
+        if isinstance(recent_movies, dict) and 'error' in recent_movies:
+            return recent_movies
+
         recent_shows = get_recent_items(4)
+        if isinstance(recent_shows, dict) and 'error' in recent_shows:
+            return recent_shows
+
         active_sessions = get_latest_session()
         
         return {

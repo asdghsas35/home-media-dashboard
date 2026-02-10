@@ -5,17 +5,23 @@ A lightweight dashboard for monitoring your home media stack (Plex, Qbittorrent,
 ## Installation
 
 ### Arch Linux
-1.  Navigate to the `dist/` directory.
+1.  Download the universal package (`any`):
+    ```bash
+    wget https://github.com/asdghsas35/home-media-dashboard/releases/download/v1.1.0/media-dashboard-1.1.0-1-any.pkg.tar.zst
+    ```
 2.  Install the package using `pacman`:
     ```bash
-    sudo pacman -U dist/media-dashboard-1.0.0-3-x86_64.pkg.tar.zst
+    sudo pacman -U media-dashboard-1.1.0-1-any.pkg.tar.zst
     ```
 
-### Debian / Ubuntu
-1.  Navigate to the `dist/` directory.
+### Debian / Ubuntu (including Raspberry Pi)
+1.  Download the universal package (`all`):
+    ```bash
+    wget https://github.com/asdghsas35/home-media-dashboard/releases/download/v1.1.0/media-dashboard_1.1.0_all.deb
+    ```
 2.  Install the package using `dpkg`:
     ```bash
-    sudo dpkg -i dist/media-dashboard_1.0.0_amd64.deb
+    sudo dpkg -i media-dashboard_1.1.0_all.deb
     ```
     *(If dependencies are missing, run `sudo apt-get install -f` to fix them)*
 

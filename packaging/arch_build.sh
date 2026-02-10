@@ -12,18 +12,10 @@ if [ ! -f "media-dashboard.spec" ]; then
     exit 1
 fi
 
-# Ensure existing binary is up to date? 
-# Creating the deb package builds it, but Arch PKGBUILD expects it in dist/media-dashboard.
-# We should probably run pyinstaller here too if not exists or forced?
-# For now, let's assume dist/media-dashboard exists or run pyinstaller.
-
-# Always rebuild binary to ensure latest code changes are included
-echo "Building binary..."
-rm -f "dist/media-dashboard"
-if [ -d ".venv" ]; then
-    source .venv/bin/activate
-fi
-pyinstaller media-dashboard.spec
+echo "Preparing source files for Arch package..."
+# Copy execution directory to packaging/arch to be included
+rm -rf "$ARCH_DIR/execution"
+cp -r execution "$ARCH_DIR/"
 
 echo "Building Arch package..."
 cd "$ARCH_DIR"
@@ -35,11 +27,15 @@ rm -f *.pkg.tar.zst
 # -f: Overwrite existing package
 # -s: Install missing dependencies (if sudo available/needed)
 # --noconfirm: Do not ask for confirmation
-makepkg -f --noconfirm
+# Note: verifying source integrity is skipped for local files usually, but we might need to update checksums or skip
+makepkg -f --noconfirm --skipchecksums --nodeps
 
 # Move package to dist
 echo "Moving package to dist/..."
 mv *.pkg.tar.zst "$PROJECT_ROOT/$DIST_DIR/"
+
+# Cleanup
+rm -rf execution src pkg media-dashboard
 
 echo "Package moved to $DIST_DIR/"
 ls -l "$PROJECT_ROOT/$DIST_DIR/"*.pkg.tar.zst

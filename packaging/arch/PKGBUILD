@@ -1,20 +1,32 @@
 # Maintainer: Greg <greg@example.com>
 pkgname=media-dashboard
-pkgver=1.0.0
-pkgrel=3
-pkgdesc="Home Media Dashboard for Plex, Qbittorrent, Sonarr, and Radarr"
-arch=('x86_64')
-url="https://github.com/example/media-dashboard"
+pkgver=1.1.0
+pkgrel=1
+pkgdesc="Home Media Dashboard (Universal)"
+arch=('any')
+url="https://github.com/asdghsas35/home-media-dashboard"
 license=('MIT')
-depends=()
+depends=('python' 'python-flask' 'python-dotenv')
 makedepends=()
-source=("media-dashboard.service")
+source=("media-dashboard.service") 
+# We expect 'execution' directory to be present in the build dir (copied by build script)
+
 sha256sums=('SKIP')
 
 package() {
-    # Install binary
-    install -Dm755 "$srcdir/../../../dist/media-dashboard" "$pkgdir/usr/bin/media-dashboard"
+    # Install application source
+    install -d "$pkgdir/usr/share/media-dashboard/execution"
+    cp -r "$srcdir/../execution/"* "$pkgdir/usr/share/media-dashboard/execution/"
     
+    # Create launcher script
+    install -d "$pkgdir/usr/bin"
+    cat > "$pkgdir/usr/bin/media-dashboard" <<EOF
+#!/bin/bash
+cd /usr/share/media-dashboard
+exec python3 execution/app.py "\$@"
+EOF
+    chmod 755 "$pkgdir/usr/bin/media-dashboard"
+
     # Install systemd user service
     install -Dm644 "$srcdir/media-dashboard.service" "$pkgdir/usr/lib/systemd/user/media-dashboard.service"
 }

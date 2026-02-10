@@ -12,7 +12,12 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html',
+        plex_url=os.getenv('PLEX_URL', 'http://localhost:32400'),
+        qbittorrent_url=os.getenv('QBITTORRENT_URL', 'http://localhost:8080'),
+        sonarr_url=os.getenv('SONARR_URL', 'http://localhost:8989'),
+        radarr_url=os.getenv('RADARR_URL', 'http://localhost:7878')
+    )
 
 @app.route('/api/data')
 def get_data():

@@ -20,10 +20,9 @@ def fetch_overseerr_data():
     
     try:
         # Fetch requests
-        # Filter is notoriously flaky in Overseerr API, so we fetch recent requests and filter manually
         req = urllib.request.Request(f"{base_url}/api/v1/request?take=50&sort=added&skip=0", headers=headers)
         
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             try:
                 data = json.loads(response.read().decode('utf-8'))
             except json.JSONDecodeError:
@@ -35,8 +34,9 @@ def fetch_overseerr_data():
         # Filter for status = 1 (PENDING APPROVAL)
         for item in results:
             if item.get('status') == 1:
-                media = item.get('media', {})
-                user = item.get('requestedBy', {})
+                media = item.get('media') or {}
+                user = item.get('requestedBy') or {}
+                request_type = item.get('type') # 'movie' or 'tv'
                 
                 # Format date
                 created_at = item.get('createdAt')
@@ -49,88 +49,54 @@ def fetch_overseerr_data():
                     except ValueError:
                         pass
 
-                # Image URL
+                # Basic Info from list
                 poster_path = media.get('posterPath')
-                # Overseerr images are often proxied via TMDB image service
-                # We can construct a TMDB url if we have the path
+                tmdb_id = media.get('tmdbId')
+                
+                title = "Unknown Title"
+                # Try simple title from properties if they exist
+                if 'title' in media:
+                     title = media['title']
+                elif 'name' in media:
+                     title = media['name']
+                elif 'originalTitle' in media:
+                    title = media['originalTitle']
+                elif 'originalName' in media:
+                    title = media['originalName']
+                
+                # If title is still unknown or we want to ensure we have the poster, fetch details
+                if (title == "Unknown Title" or not poster_path) and tmdb_id and request_type:
+                    try:
+                        # Fetch details from Overseerr (which proxies/caches TMDB)
+                        # Ensure request_type matches endpoint expectation (movie/tv)
+                        detail_url = f"{base_url}/api/v1/{request_type}/{tmdb_id}"
+                        req_d = urllib.request.Request(detail_url, headers=headers)
+                        with urllib.request.urlopen(req_d, timeout=3) as resp_d:
+                            details = json.loads(resp_d.read().decode('utf-8'))
+                            
+                            # Update title
+                            if 'title' in details:
+                                title = details['title']
+                            elif 'name' in details:
+                                title = details['name']
+                                
+                            # Update poster if missing
+                            if not poster_path and 'posterPath' in details:
+                                poster_path = details['posterPath']
+                    except Exception as e:
+                        # Fail silently on details fetch to avoid breaking the dashboard
+                        print(f"Overseerr detail fetch failed for {tmdb_id}: {e}")
+
+                # Image URL
                 image_url = ""
                 if poster_path:
                    image_url = f"https://image.tmdb.org/t/p/w200{poster_path}"
                 
-                # Title
-                title = "Unknown Title"
-                if media.get('mediaType') == 'movie':
-                     title = media.get('tmdbId') # Wait, media object usually has metadata? 
-                     # Actually, the 'media' object in /request response is light.
-                     # But current Overseerr versions usually include it. 
-                     # Let's fallback to asking the item directly if media is bare
-                     pass
-                
-                # Better way: The `media` object inside `results` usually has `tmdbId` etc. 
-                # But the request object itself might have `media` info embedded differently depending on version.
-                # Let's inspect standard output.
-                # Standard /request response items have:
-                # { id: 1, status: 1, media: { tmdbId: 123, status: ... } }
-                # But does it have the TITLE? 
-                # Usually we might need to fetch media details, but that's n+1.
-                # Let's look at the `media` object. 
-                # Some versions of API return `media` populated with `tmdbId`.
-                # Wait, usually the request listing includes basic info. 
-                # Let's check if the 'media' object is enriched or if we need to rely on what's there.
-                
-                # Actually, looking at Overseerr API docs, the result item has `media` which has `tmdbId`.
-                # The result item DOES NOT usually have the title directly if it's just the request wrapper?
-                # Wait, standard response: 
-                # { "id": 1, "status": 1, "media": { ... }, "type": "movie" }
-                # It seems the request object DOES NOT always carry the title.
-                # However, usually the dashboard needs to show it.
-                # Let's try to grab it from `media` if available, or maybe `title` is on the root object?
-                # Re-checking API docs/community examples: 
-                # The request object has `media` which is the media item in Overseerr db. 
-                # BUT, often to get the title, one might need to use the `media` endpoint or rely on `media` having it.
-                # Let's write code that assumes it MIGHT be there, but effectively we might just have `tmdbId`.
-                
-                # CORRECT APPROACH for efficient dashboard:
-                # The list endpoint *usually* hydrates `media` enough or we might need to rely on what we get.
-                # Actually checking a sample response: the `media` object has `tmdbId`.
-                # But wait, looking at `fetch_overseerr_data` context, we want to avoid N+1 requests.
-                # Let's assume for now we can get the title. 
-                # If not, we might handle it gracefully.
-                # Actually, let's look at a safer property: 
-                # Many request responses include `media` -> which has `tmdbId`.
-                # AND they include `...`?
-                
-                # Let's try to find title in `media.title` (if it's a media object) or root.
-                # If we look at the type, `movie` or `tv`.
-                
-                # Mock approach for safety:
-                # We will check keys.
-                
-                request_title = "Unknown"
-                # Sometimes it's in media. 
-                # Let's try to get it from `media` dict if possible.
-                # Else leave as Unknown.
-                
-                # Actually, let's look at what we sent in the plan: "title, user, date, image".
-                # I will trust that `media` object has `originalTitle` or `name` or `title`.
-                
-                if 'title' in media:
-                     request_title = media['title']
-                elif 'name' in media:
-                     request_title = media['name']
-                elif 'originalTitle' in media:
-                    request_title = media['originalTitle']
-                elif 'originalName' in media:
-                    request_title = media['originalName']
-                
-                # Fallback: if we only have tmdbId, we might be stuck without a title without doing more calls.
-                # But most API responses for lists include a snapshot.
-                
                 pending_requests.append({
                     'id': item.get('id'),
-                    'title': request_title,
-                    'user': user.get('email', 'Unknown User').split('@')[0], # Use username part of email if username missing
-                    'user_avatar': user.get('avatar'), # valid URL or null
+                    'title': title,
+                    'user': user.get('email', 'Unknown User').split('@')[0], 
+                    'user_avatar': user.get('avatar'), 
                     'date': date_str,
                     'image': image_url,
                     'status': 'Pending Approval'

@@ -14,3 +14,8 @@ packaging/arch/src/
 packaging/arch/execution/
 packaging/arch/media-dashboard/
 *.pkg.tar.zst
+
+# Development & Documentation
+directives/
+walkthrough.md
+.vscode/
